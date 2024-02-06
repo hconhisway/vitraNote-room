@@ -4,6 +4,7 @@ import http from "http";
 import { Server as SocketIO } from "socket.io";
 import mongoose from "mongoose";
 import fs from 'fs';
+import morgan from 'morgan';
 
 type UserToFollow = {
   socketId: string;
@@ -27,10 +28,9 @@ require("dotenv").config(
 const app = express();
 const cors = require('cors');
 app.use(cors()); // 允许所有跨域请求
-
+// app.use(morgan('dev'));
 const port =
   process.env.PORT || (process.env.NODE_ENV !== "development" ? 80 : 3002); // default port to listen
-
 mongoose.connect('mongodb://localhost:27017/vitraNote')
   .then(() => console.log('MongoDB connected'))
   .catch(err => console.error('MongoDB connection error:', err));

@@ -1,0 +1,4 @@
+yarn run v1.22.21
+$ cross-env NODE_ENV=development ts-node-dev --respawn --transpile-only src/index.ts
+[INFO] 00:39:39 ts-node-dev ver. 1.1.8 (using ts-node ver. 9.1.1, typescript ver. 4.2.3)
+MongoDB connected
