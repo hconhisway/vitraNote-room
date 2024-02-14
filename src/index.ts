@@ -43,6 +43,12 @@ const TrailPointSchema = new Schema({
     currentPoint: [Number]
 }, { _id: false });
 
+const ImageChangesSchema = new Schema({
+  currentTime: [Number],
+  imageId: String,
+  sizeInfo: [Number]
+}, { _id: false });
+
 // 定义用户轨迹的Schema
 const UserTrailSchema = new Schema({
     fileName: {
@@ -53,8 +59,35 @@ const UserTrailSchema = new Schema({
     trails: [TrailPointSchema], // 用户的轨迹数组
 });
 
+const ImageSwitchingHistory = new Schema({
+    fileName: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    imageChanges: [ImageChangesSchema], 
+});
+
+const audioRecordingInfoSchema = new Schema({
+  currentTime: String, // 用户的轨迹数组
+  status: String
+}, {_id: false});
+
+const audioRecordingInfoSchemaH = new Schema({
+  fileName: {
+      type: String,
+      required: true,
+      trim: true // 去除用户名两边的空格
+  },
+  audioInfo: [audioRecordingInfoSchema],
+});
+
+
+
 // 创建模型
 const UserTrails = mongoose.model('UserTrail', UserTrailSchema);
+const SwitchingHistory = mongoose.model('SwitchingHistory', ImageSwitchingHistory);
+const audioRecordingInfo = mongoose.model('audioRecordingInfo', audioRecordingInfoSchemaH);
 
 // 定义图片模型
 const ImageSchema = new mongoose.Schema({
@@ -300,17 +333,56 @@ try {
         { fileName: fileName }, 
         { $push: { trails: trailData } },
         { upsert: true, new: true }
-    )
-    .then((updatedDocument) => {
+      )
+      .then((updatedDocument) => {
+          // 可以在这里处理更新后的文档，如果需要的话
+          // console.log('Trail updated successfully:', updatedDocument);
+      }).catch((error) => {
+          // 错误处理
+          // console.error('Error updating trail:', error);
+      });
+    });
+  
+    let lastHistoryImageId : any = null;
+    // 监听 'record_image_switch' 事件
+    socket.on('record_image_switch', async (imageInfo) => {
+      try {
+        let {imageId, sizeInfo, currentTime, fileName} = imageInfo;
+        fileName = fileName.replace(/\s+/g, '');
+        if (lastHistoryImageId === null || lastHistoryImageId !== imageId) {
+          const historyData = { currentTime, imageId, sizeInfo };
+          await SwitchingHistory.findOneAndUpdate(
+            { fileName: fileName },
+            { $push: { imageChanges: historyData } },
+            {upsert: true, new: true}
+          );
+
+          lastHistoryImageId = imageId;
+        }
+        
+      } catch (error) {
+        console.error('Error recording image:', error);
+      }
+    });
+
+    socket.on("receive_recording_info", (data) => {
+      // console.log(data)
+      let {fileName, currentTime, status} = data;
+      fileName = fileName.replace(/\s+/g, '');
+      const audioInfo = { currentTime, status };
+      audioRecordingInfo.findOneAndUpdate(
+        { fileName: fileName },
+        { $push: { audioInfo: audioInfo } },
+        { upsert: true, new: true }
+      ).then((updatedDocument) => {
         // 可以在这里处理更新后的文档，如果需要的话
         // console.log('Trail updated successfully:', updatedDocument);
     }).catch((error) => {
         // 错误处理
         // console.error('Error updating trail:', error);
     });
-    });
-  
-  
+    })
+
 
     socket.on("disconnecting", async () => {
       socketDebug(`${socket.id} has disconnected`);
