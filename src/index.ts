@@ -5,6 +5,9 @@ import { Server as SocketIO } from "socket.io";
 import mongoose from "mongoose";
 import fs from 'fs';
 import morgan from 'morgan';
+import multer from 'multer';
+import path from 'path';
+import { processAudioFiles } from "./AudioSyn";
 
 type UserToFollow = {
   socketId: string;
@@ -29,6 +32,27 @@ const app = express();
 const cors = require('cors');
 app.use(cors()); // 允许所有跨域请求
 // app.use(morgan('dev'));
+
+// 配置存储选项
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const audioPath = path.resolve(__dirname, '../audio');
+    cb(null, audioPath);
+  },
+  filename: function (req, file, cb) {
+    const username = req.headers['x-username'];
+    if (typeof username !== 'string') {
+      return cb(new Error('Username is required'), '');
+    }
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const sanitizedUsername = username.replace(/[^a-zA-Z0-9]/g, ''); // 简单的清理，避免文件名中出现无效字符
+    // cb(null, `${sanitizedUsername}-${uniqueSuffix}.wav`);
+    cb(null, `${sanitizedUsername}_audio-${uniqueSuffix}.wav`);
+  }
+});
+
+const upload = multer({ storage: storage });
+
 const port =
   process.env.PORT || (process.env.NODE_ENV !== "development" ? 80 : 3002); // default port to listen
 mongoose.connect('mongodb://localhost:27017/vitraNote')
@@ -87,7 +111,7 @@ const audioRecordingInfoSchemaH = new Schema({
 // 创建模型
 const UserTrails = mongoose.model('UserTrail', UserTrailSchema);
 const SwitchingHistory = mongoose.model('SwitchingHistory', ImageSwitchingHistory);
-const audioRecordingInfo = mongoose.model('audioRecordingInfo', audioRecordingInfoSchemaH);
+export const audioRecordingInfo = mongoose.model('audioRecordingInfo', audioRecordingInfoSchemaH);
 
 // 定义图片模型
 const ImageSchema = new mongoose.Schema({
@@ -138,7 +162,11 @@ app.get('/images/current', async (req, res) => {
   }
 });
 
-
+app.post('/uploadAudio', upload.single('audio'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).send('No file uploaded.');
+  }
+});
 
 // app.delete('/images/:id', async (req, res) => {
 //   try {
@@ -271,6 +299,7 @@ try {
     
     // 监听 'set_current_image' 事件
     socket.on('set_current_image', async (imageId) => {
+      processAudioFiles(path.resolve(__dirname, '../audio'));
       try {
         // 清除所有图片的当前状态
         await Image.updateMany({}, { $unset: { isCurrent: false } });
